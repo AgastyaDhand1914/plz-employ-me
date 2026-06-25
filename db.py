@@ -32,13 +32,7 @@ def upsert_resume_profile(skills: list, domains: list, keywords: list, raw_text:
 #seen ids for DEDUPLICATION
 
 def is_seen(source: str, external_id: str) -> bool:
-    res = (
-        supabase.table("seen_ids")
-        .select("external_id")
-        .eq("source", source)
-        .eq("external_id", external_id)
-        .execute()
-    )
+    res = (supabase.table("seen_ids").select("external_id").eq("source", source).eq("external_id", external_id).execute())
     return len(res.data) > 0
 
 

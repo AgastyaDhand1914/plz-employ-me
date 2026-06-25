@@ -1,8 +1,9 @@
-# ai.py
 import os
 import json
 from google import genai
 from dotenv import load_dotenv
+import time
+import re
 
 load_dotenv()
 
@@ -10,9 +11,22 @@ client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 MODEL = "gemini-2.5-flash"
 
 
-def _generate(prompt: str) -> str:
-    response = client.models.generate_content(model=MODEL, contents=prompt)
-    return response.text.strip().replace("```json", "").replace("```", "").strip()
+def _generate(prompt: str, retries: int = 4) -> str:
+    for attempt in range(retries):
+        try:
+            response = client.models.generate_content(model=MODEL, contents=prompt)
+            return response.text.strip().replace("```json", "").replace("```", "").strip()
+        except Exception as e:
+            error_msg = str(e)
+            print(error_msg)
+            if attempt < retries - 1:
+                #try to extract the suggested retry delay from the error
+                m = re.search(r"retryDelay.*?(\d+)s", error_msg)
+                wait = int(m.group(1)) + 2 if m else 2 ** (attempt + 2)
+                print(f"[ai] Gemini error, retrying in {wait}s...")
+                time.sleep(wait)
+            else:
+                raise
 
 def parse_resume(pdf_path: str) -> dict:
 
