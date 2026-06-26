@@ -9,7 +9,7 @@ DELHI_NCR_KEYWORDS = [
 RELEVANT_KEYWORDS = [
     #tech roles
     "developer", "engineer", "software", "backend", "frontend", "full stack",
-    "fullstack", "full-stack" "web",
+    "fullstack", "full-stack", "web",
     #data/ml
     "data", "machine learning", "ml", "ai", "deep learning", "nlp",
     "analyst", "science", "python", "agent", "agentic",
@@ -62,7 +62,11 @@ def filter_listings(listings: list[dict]) -> list[dict]:
     returns only listings that are new and pass the location filter"""
     
     passed = []
+    seen_external_ids = set()
     for listing in listings:
+        external_id = listing.get("external_id")
+        if external_id and external_id in seen_external_ids:
+            continue
         if is_duplicate(listing):
             continue
         if not passes_location_filter(listing):
@@ -71,6 +75,8 @@ def filter_listings(listings: list[dict]) -> list[dict]:
         if not passes_keyword_filter(listing):
             print(f"[filter] Skipped (keyword): {listing['title']}")
             continue
+        if external_id:
+            seen_external_ids.add(external_id)
         passed.append(listing)
     print(f"[filter] {len(passed)} listings passed out of {len(listings)} total.")
     return passed

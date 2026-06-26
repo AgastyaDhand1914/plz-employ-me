@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 from config import SUPABASE_KEY, SUPABASE_URL
 from supabase import create_client, Client
 
@@ -40,13 +41,38 @@ def mark_seen(source: str, external_id: str):
 
 #LISTINGS
 
+def get_listing_by_source_external_id(source: str, external_id: str) -> dict | None:
+    """return an existing listing matching a source and external id"""
+    if not source or not external_id:
+        return None
+
+    res = (supabase.table("listings")
+           .select("*")
+           .eq("source", source)
+           .eq("external_id", external_id)
+           .limit(1)
+           .execute())
+    if res.data:
+        return res.data[0]
+    return None
+
+
 def insert_listing(listing: dict, relevance_score: int, relevance_reason: str) -> str:
     """
     inserts a scored listing and returns the new row's UUID
     `listing` must match the scraper interface contract
     """
+    existing = get_listing_by_source_external_id(listing.get("source"), listing.get("external_id"))
+    if existing:
+        supabase.table("listings").update({
+            "relevance_score": relevance_score,
+            "relevance_reason": relevance_reason,
+        }).eq("id", existing["id"]).execute()
+        return existing["id"]
+
     row = {
         "source": listing["source"],
+        "external_id": listing.get("external_id"),
         "type": listing["type"],
         "title": listing["title"],
         "company_or_organiser": listing["company_or_organiser"],
@@ -129,25 +155,49 @@ def get_all_applications() -> list[dict]:
 
 def enqueue_listing(listing: dict):
     """push a new filtered listing into pending_score table which functions as a job queue"""
-    
     supabase.table("pending_score").insert({
         "listing": listing,
         "processed": False,
+        "queued_at": datetime.utcnow().isoformat(),
     }).execute()
 
 
 def dequeue_one() -> dict | None:
-    """fetch the oldest unprocessed listing from scoring queue (pending_score table).
-    we atomically mark it as processed to avoid double scoring on concurrent runs or retries"""
+    """claim the oldest unprocessed listing from scoring queue (pending_score table)"""
 
-    res = (supabase.table("pending_score").select("*").eq("processed", False).order("queued_at").limit(1).execute())
+    res = (supabase.table("pending_score")
+           .select("*")
+           .eq("processed", False)
+           .order("queued_at")
+           .limit(1)
+           .execute())
 
     if not res.data:
         return None
 
     row = res.data[0]
-    supabase.table("pending_score").update({ "processed": True }).eq("id", row["id"]).execute()
+    update = (supabase.table("pending_score")
+              .update({"processed": True})
+              .eq("id", row["id"])
+              .eq("processed", False)
+              .execute())
+
+    updated_rows = None
+    if hasattr(update, "data"):
+        updated_rows = update.data
+    elif isinstance(update, dict):
+        updated_rows = update.get("data")
+
+    if not updated_rows:
+        return None
+
+    row["processed"] = True
     return row
+
+
+def requeue_pending_score(queue_id: str):
+    """mark a claimed queue row as unprocessed again so it can be retried"""
+    supabase.table("pending_score").update({"processed": False}).eq("id", queue_id).execute()
 
 
 def delete_pending_score(queue_id: str):
@@ -155,7 +205,34 @@ def delete_pending_score(queue_id: str):
     supabase.table("pending_score").delete().eq("id", queue_id).execute()
 
 
-def queue_depth() -> int:
-    """no. of listings waiting in job queue"""
+def clear_pending_score():
+    """delete all rows from the pending_score table"""
+    supabase.table("pending_score").delete().execute()
+
+
+def pending_score_unprocessed_count() -> int:
+    """returns no.of listings not yet claimed for scoring"""
     res = (supabase.table("pending_score").select("id", count="exact").eq("processed", False).execute())
+    return res.count or 0
+
+
+def pending_score_processed_count() -> int:
+    """returns no.of claimed listings waiting for final completion"""
+    res = (supabase.table("pending_score").select("id", count="exact").eq("processed", True).execute())
+    return res.count or 0
+
+
+def pending_score_has_unprocessed() -> bool:
+    """return true when any queue rows exist, claimed or unclaimed"""
+    res = supabase.table("pending_score").select("id", count="exact").execute()
+    return (res.count or 0) > 0
+
+
+def pending_score_has_processed_rows() -> bool:
+    return pending_score_processed_count() > 0
+
+
+def queue_depth() -> int:
+    """no. of listings waiting in job queue, including claimed rows"""
+    res = supabase.table("pending_score").select("id", count="exact").execute()
     return res.count or 0
