@@ -84,6 +84,10 @@ location: str | None = None,) -> list[dict]:
     return res.data
 
 
+def delete_listing(listing_id: str):
+    supabase.table("listings").delete().eq("id", listing_id).execute()
+
+
 def get_recent_listings(limit: int = 50) -> list[dict]:
     res = (supabase.table("listings").select("*").order("first_seen_at", desc=True).limit(limit).execute())
     return res.data

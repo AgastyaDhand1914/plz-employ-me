@@ -2,7 +2,7 @@ from scrapers.internshala import scrape as scrape_internshala
 from filters import filter_listings
 from ai import score_listing, generate_digest
 from db import (get_resume_profile, insert_listing, mark_seen, 
-enqueue_listing, dequeue_one, queue_depth, get_recent_listings)
+enqueue_listing, dequeue_one, delete_pending_score, queue_depth, get_recent_listings)
 from notifier import send_digest_email
 from config import SCORE_THRESHOLD
 from datetime import datetime
@@ -62,11 +62,13 @@ def score_one_from_queue():
 
     if score < SCORE_THRESHOLD:
         print(f"[scorer] below threshold ({score}): {listing['title']}")
+        delete_pending_score(row["id"])
         return
 
     listing["relevance_score"] = score
     listing["relevance_reason"] = reason
     insert_listing(listing, score, reason)
+    delete_pending_score(row["id"])
     print(f"[scorer] stored ({score}/10): {listing['title']}")
 
 
