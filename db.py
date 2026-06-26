@@ -1,4 +1,5 @@
 import os
+import re
 from datetime import datetime
 from config import SUPABASE_KEY, SUPABASE_URL
 from supabase import create_client, Client
@@ -41,17 +42,32 @@ def mark_seen(source: str, external_id: str):
 
 #LISTINGS
 
-def get_listing_by_source_external_id(source: str, external_id: str) -> dict | None:
-    """return an existing listing matching a source and external id"""
-    if not source or not external_id:
+def get_listing_by_source_external_id(source: str, external_id: str | None, url: str | None = None) -> dict | None:
+    """return an existing listing matching a source and external id or fallback to URL"""
+    if not source:
         return None
 
-    res = (supabase.table("listings")
-           .select("*")
-           .eq("source", source)
-           .eq("external_id", external_id)
-           .limit(1)
-           .execute())
+    query = supabase.table("listings").select("*").eq("source", source)
+    if external_id:
+        query = query.eq("external_id", external_id)
+    elif url:
+        query = query.eq("url", url)
+    else:
+        return None
+
+    try:
+        res = query.limit(1).execute()
+    except Exception:
+        if url:
+            res = (supabase.table("listings")
+                   .select("*")
+                   .eq("source", source)
+                   .eq("url", url)
+                   .limit(1)
+                   .execute())
+        else:
+            raise
+
     if res.data:
         return res.data[0]
     return None
@@ -62,7 +78,11 @@ def insert_listing(listing: dict, relevance_score: int, relevance_reason: str) -
     inserts a scored listing and returns the new row's UUID
     `listing` must match the scraper interface contract
     """
-    existing = get_listing_by_source_external_id(listing.get("source"), listing.get("external_id"))
+    existing = get_listing_by_source_external_id(
+        listing.get("source"),
+        listing.get("external_id"),
+        listing.get("url"),
+    )
     if existing:
         supabase.table("listings").update({
             "relevance_score": relevance_score,
@@ -72,7 +92,6 @@ def insert_listing(listing: dict, relevance_score: int, relevance_reason: str) -
 
     row = {
         "source": listing["source"],
-        "external_id": listing.get("external_id"),
         "type": listing["type"],
         "title": listing["title"],
         "company_or_organiser": listing["company_or_organiser"],

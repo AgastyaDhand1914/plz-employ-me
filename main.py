@@ -13,7 +13,4 @@ if __name__ ==  "__main__":
     print("  scorer:   every 90 seconds")
     print("  digest:   08:00 daily")
 
-    #immediate scraping on deployment, cron schedule takes over after this
-    run_scrape_and_enqueue()
-
     scheduler.start()
