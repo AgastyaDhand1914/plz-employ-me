@@ -1,72 +1,101 @@
 from scrapers.internshala import scrape as scrape_internshala
 from filters import filter_listings
-from ai import score_listing
-from db import get_resume_profile, insert_listing, mark_seen
+from ai import score_listing, generate_digest
+from db import (get_resume_profile, insert_listing, mark_seen, 
+enqueue_listing, dequeue_one, queue_depth, get_recent_listings)
+from notifier import send_digest_email
 from config import SCORE_THRESHOLD
-import time
+from datetime import datetime
 
 
-def run_pipeline() -> list[dict]:
+def run_scrape_and_enqueue():
+    """
+    phase 1: runs once or twice a day
 
-    #full phase pipeline for testing:
-    # get resume prfile
-    # scrape data from forums
-    # location filter + deduplication
-    # score lisitng
-    # tally and store relevant listings
-    # return the stored listings (notifier stuff)
+    scrapes all sources, applies location + keyword + dedup filters,
+    pushes passing listings into pending_score queue
+    """
+    print("[scrape] starting scrape run >:)")
 
-
-    print("[pipeline] Starting run.")
-
-    # load resume profile
-    profile = get_resume_profile()
-    if not profile:
-        print("[pipeline] ERROR: No resume profile found. Run parse_resume.py first.")
-        return []
-
-    # scrape
     raw_listings = scrape_internshala()
-    # later add: scrape_unstop(), scrape_devfolio() etc
+    #later: unstop, devfolio etc
 
-    # location filter + deduplication
     filtered = filter_listings(raw_listings)
 
-    # score and store
-    stored = []
+    queued = 0
     for listing in filtered:
-        score, reason = score_listing(listing, profile)
-        time.sleep(5)
-
-        #always mark as seen so we don't wanna score it again in next run,
-        #even if it didn't meet the threshold
+        #mark seen immediately so next scrape run doesn't re-enqueue (is that even a word)
         mark_seen(listing["source"], listing["external_id"])
+        enqueue_listing(listing)
+        queued += 1
 
-        if score < SCORE_THRESHOLD:
-            print(
-                f"[pipeline] Below threshold (score {score}): {listing['title']}"
-            )
-            continue
-
-        listing["relevance_score"] = score
-        listing["relevance_reason"] = reason
-
-        listing_id = insert_listing(listing, score, reason)
-        if listing_id:
-            listing["id"] = listing_id
-            stored.append(listing)
-            print(
-                f"[pipeline] Stored (score {score}): {listing['title']} @ {listing['company_or_organiser']}"
-            )
-
-    print(f"[pipeline] Run complete. {len(stored)} new listings stored.")
-    return stored
+    print(f"[scrape] done, {queued} listings queued for scoring :|")
 
 
+def score_one_from_queue():
+    """
+    phase 2: runs every few minutes via APScheduler
 
-# FOR MANUAL TEST RUN ONLY
-if __name__ == "__main__":
-    results = run_pipeline()
-    print(f"\nSummary: {len(results)} listings stored this run.")
-    for r in results:
-        print(f"  [{r['relevance_score']}/10] {r['title']} — {r['company_or_organiser']}")
+    picks exactly one listing from the queue, scores it with gemini,
+    stores it if above threshold. one api call per invocation
+    """
+    profile = get_resume_profile()
+    if not profile:
+        print("[scorer] no resume profile found, what are you doing gng?")
+        return
+
+    row = dequeue_one()
+    if row is None:
+        return    #queue empty, nothing to do (silent return)
+
+    listing = row["listing"]
+    print(f"[scorer] scoring: {listing['title']} @ {listing.get('company_or_organiser', '?')}")
+
+    try:
+        score, reason = score_listing(listing, profile)
+    except Exception as e:
+        print(f"[scorer] gemini error, will retry next tick: {e}")
+        #un-mark processed so it enters the queue again next tick
+        from db import supabase
+        supabase.table("pending_score").update({"processed": False}).eq("id", row["id"]).execute()
+        return
+
+    if score < SCORE_THRESHOLD:
+        print(f"[scorer] below threshold ({score}): {listing['title']}")
+        return
+
+    listing["relevance_score"] = score
+    listing["relevance_reason"] = reason
+    insert_listing(listing, score, reason)
+    print(f"[scorer] stored ({score}/10): {listing['title']}")
+
+
+def run_morning_digest():
+    """
+    phase 3: runs {chosen amt} a day at {chosen time}
+
+    pulls recent high score listings, generates a digest and emails it via SMTP
+    """
+    profile = get_resume_profile()
+    if not profile:
+        print("[digest] no profile found, what are you doing gng?")
+        return
+
+    depth = queue_depth()
+    listings = get_recent_listings(limit=30)
+
+    if not listings:
+        print("[digest] no listings to digest, we might be cooked")
+        return
+
+    body = generate_digest(listings)
+
+    if depth > 0:
+        body += f"\n\n---\n[{depth} more listings are still being scored and will appear in tomorrow's digest :)]"
+
+    today = datetime.now().strftime("%d %b %Y")
+    send_digest_email(
+        subject=f"you might be employable after all. lock innnnn ({today})",
+        body=body,
+    )
+    print(f"[digest] sent digest covering {len(listings)} listings")

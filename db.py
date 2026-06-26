@@ -1,11 +1,6 @@
 import os
-from dotenv import load_dotenv
+from config import SUPABASE_KEY, SUPABASE_URL
 from supabase import create_client, Client
-
-load_dotenv()
-
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
@@ -124,3 +119,34 @@ def get_all_applications() -> list[dict]:
     res = (supabase.table("applications").select("*, listings(*)")    #joins listing details
            .order("applied_at", desc=True).execute())
     return res.data
+
+
+#PUSH AND POP OPERATIONS FOR SCORING JOB QUEUE
+
+def enqueue_listing(listing: dict):
+    """push a new filtered listing into pending_score table which functions as a job queue"""
+    
+    supabase.table("pending_score").insert({
+        "listing": listing,
+        "processed": False,
+    }).execute()
+
+
+def dequeue_one() -> dict | None:
+    """fetch the oldest unprocessed listing from scoring queue (pending_score table).
+    we atomically mark it as processed to avoid double scoring on concurrent runs or retries"""
+
+    res = (supabase.table("pending_score").select("*").eq("processed", False).order("queued_at").limit(1).execute())
+
+    if not res.data:
+        return None
+
+    row = res.data[0]
+    supabase.table("pending_score").update({ "processed": True }).eq("id", row["id"]).execute()
+    return row
+
+
+def queue_depth() -> int:
+    """no. of listings waiting in job queue"""
+    res = (supabase.table("pending_score").select("id", count="exact").eq("processed", False).execute())
+    return res.count or 0

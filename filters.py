@@ -12,9 +12,9 @@ RELEVANT_KEYWORDS = [
     "fullstack", "full-stack" "web",
     #data/ml
     "data", "machine learning", "ml", "ai", "deep learning", "nlp",
-    "analyst", "science", "python", "agent", "agentic"
+    "analyst", "science", "python", "agent", "agentic",
     #stack
-    "react", "node", "flask", "api", "fast api", "fastapi", "express", "next"
+    "react", "node", "flask", "api", "fast api", "fastapi", "express", "next",
     #research/tech adjacent
     "research", "product", "ui", "ux", "design",
     #languages
