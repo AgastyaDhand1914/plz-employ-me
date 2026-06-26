@@ -91,7 +91,7 @@ def run_morning_digest():
     body = generate_digest(listings)
 
     if depth > 0:
-        body += f"\n\n---\n[{depth} more listings are still being scored and will appear in tomorrow's digest :)]"
+        body += f"\n\n---\n[{depth} more listings are still being scored. Updates will keep showing in the dashbaord :)]"
 
     today = datetime.now().strftime("%d %b %Y")
     send_digest_email(
