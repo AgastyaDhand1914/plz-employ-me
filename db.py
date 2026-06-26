@@ -150,6 +150,11 @@ def dequeue_one() -> dict | None:
     return row
 
 
+def delete_pending_score(queue_id: str):
+    """delete a processed or unwanted row from the pending_score table (queue)"""
+    supabase.table("pending_score").delete().eq("id", queue_id).execute()
+
+
 def queue_depth() -> int:
     """no. of listings waiting in job queue"""
     res = (supabase.table("pending_score").select("id", count="exact").eq("processed", False).execute())
