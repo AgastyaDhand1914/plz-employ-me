@@ -223,9 +223,8 @@ def pending_score_processed_count() -> int:
 
 
 def pending_score_has_unprocessed() -> bool:
-    """return true when any queue rows exist, claimed or unclaimed"""
-    res = supabase.table("pending_score").select("id", count="exact").execute()
-    return (res.count or 0) > 0
+    """return true when any rows are still waiting to be scored"""
+    return pending_score_unprocessed_count() > 0
 
 
 def pending_score_has_processed_rows() -> bool:
@@ -233,6 +232,5 @@ def pending_score_has_processed_rows() -> bool:
 
 
 def queue_depth() -> int:
-    """no. of listings waiting in job queue, including claimed rows"""
-    res = supabase.table("pending_score").select("id", count="exact").execute()
-    return res.count or 0
+    """no. of listings still waiting in the scoring queue"""
+    return pending_score_unprocessed_count()

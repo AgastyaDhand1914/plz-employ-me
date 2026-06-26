@@ -47,6 +47,18 @@ def _set_last_empty_scrape(dt: datetime):
     _save_pending_state(state)
 
 
+def _clear_empty_scrape_state():
+    state = _load_pending_state()
+    state.pop("last_empty_scrape", None)
+    if state:
+        _save_pending_state(state)
+    else:
+        try:
+            os.remove(STATE_FILE)
+        except FileNotFoundError:
+            pass
+
+
 def _should_scrape_now() -> bool:
     last_empty = _get_last_empty_scrape()
     if last_empty is None:
@@ -92,6 +104,7 @@ def run_scrape_and_enqueue():
         except Exception as e:
             print(f"[scrape] warning: could not mark seen for {listing.get('external_id')} : {e}")
 
+    _clear_empty_scrape_state()
     print(f"[scrape] done, {queued} listings queued for scoring :|")
 
 
