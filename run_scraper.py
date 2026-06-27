@@ -1,0 +1,2 @@
+from pipeline import run_scrape_and_enqueue
+run_scrape_and_enqueue()

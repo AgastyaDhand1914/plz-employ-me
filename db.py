@@ -1,5 +1,3 @@
-import os
-import re
 from datetime import datetime, timedelta
 from config import SUPABASE_KEY, SUPABASE_URL
 from supabase import create_client, Client
@@ -231,30 +229,15 @@ def delete_pending_score(queue_id: str):
     supabase.table("pending_score").delete().eq("id", queue_id).execute()
 
 
-def clear_pending_score():
-    """delete all rows from the pending_score table"""
-    supabase.table("pending_score").delete().execute()
-
-
 def pending_score_unprocessed_count() -> int:
     """returns no.of listings not yet claimed for scoring"""
     res = (supabase.table("pending_score").select("id", count="exact").eq("processed", False).execute())
     return res.count or 0
 
 
-def pending_score_processed_count() -> int:
-    """returns no.of claimed listings waiting for final completion"""
-    res = (supabase.table("pending_score").select("id", count="exact").eq("processed", True).execute())
-    return res.count or 0
-
-
 def pending_score_has_unprocessed() -> bool:
     """return true when any rows are still waiting to be scored"""
     return pending_score_unprocessed_count() > 0
-
-
-def pending_score_has_processed_rows() -> bool:
-    return pending_score_processed_count() > 0
 
 
 def queue_depth() -> int:

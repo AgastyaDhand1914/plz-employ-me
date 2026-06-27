@@ -1,0 +1,30 @@
+name: scraper
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"    #run every 5 minutes
+  workflow_dispatch:         #keeping coz it allow triggering manually from github UI
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: install dependencies
+        run: pip install -r requirements.txt
+
+      - name: run scraper
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          SCORE_THRESHOLD: ${{ secrets.SCORE_THRESHOLD }}
+        run: python run_scraper.py

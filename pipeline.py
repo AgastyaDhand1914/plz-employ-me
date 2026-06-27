@@ -7,9 +7,6 @@ from db import (get_resume_profile, insert_listing, mark_seen, enqueue_listing, 
 from notifier import send_digest_email
 from config import SCORE_THRESHOLD
 from datetime import datetime, timedelta
-import json
-import os
-
 
 EMPTY_SCRAPE_DELAY = timedelta(hours=1)
 

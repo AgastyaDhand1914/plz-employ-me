@@ -1,0 +1,2 @@
+from pipeline import run_morning_digest
+run_morning_digest()
