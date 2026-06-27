@@ -1,6 +1,6 @@
 import os
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from config import SUPABASE_KEY, SUPABASE_URL
 from supabase import create_client, Client
 
@@ -195,8 +195,7 @@ def dequeue_one() -> dict | None:
         return None
 
     row = res.data[0]
-    update = (supabase.table("pending_score")
-              .update({"processed": True})
+    update = (supabase.table("pending_score").update({"processed": True, "claimed_at": datetime.utcnow().isoformat()})
               .eq("id", row["id"])
               .eq("processed", False)
               .execute())
@@ -212,6 +211,14 @@ def dequeue_one() -> dict | None:
 
     row["processed"] = True
     return row
+
+
+def reset_stuck_rows(older_than_minutes: int = 15):
+    """reset any claimed rows that have been processing for too long,
+    means the workflow that claimed them died before finishing"""
+
+    cutoff = (datetime.utcnow() - timedelta(minutes=older_than_minutes)).isoformat()
+    supabase.table("pending_score").update({"processed": False, "claimed_at": None}).eq("processed", True).lt("claimed_at", cutoff).execute()
 
 
 def requeue_pending_score(queue_id: str):
@@ -253,3 +260,16 @@ def pending_score_has_processed_rows() -> bool:
 def queue_depth() -> int:
     """no. of listings still waiting in the scoring queue"""
     return pending_score_unprocessed_count()
+
+
+#PIPELINE STATE FUNCTIONS
+
+def get_pipeline_state(key: str) -> str | None:
+    res = supabase.table("pipeline_state").select("value").eq("key", key).limit(1).execute()
+    if res.data:
+        return res.data[0]["value"]
+    return None
+
+
+def set_pipeline_state(key: str, value: str):
+    supabase.table("pipeline_state").upsert({"key": key, "value": value, "updated_at": datetime.utcnow().isoformat()}).execute()

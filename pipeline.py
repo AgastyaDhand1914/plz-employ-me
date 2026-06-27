@@ -2,8 +2,8 @@ from scrapers.internshala import scrape as scrape_internshala
 from filters import filter_listings
 from ai import score_listing, generate_digest
 from db import (get_resume_profile, insert_listing, mark_seen, enqueue_listing, dequeue_one,
-    delete_pending_score, requeue_pending_score, pending_score_has_unprocessed,
-    queue_depth, get_recent_listings,)
+    delete_pending_score, requeue_pending_score, pending_score_has_unprocessed, queue_depth, 
+    get_recent_listings, reset_stuck_rows, get_pipeline_state, set_pipeline_state,)
 from notifier import send_digest_email
 from config import SCORE_THRESHOLD
 from datetime import datetime, timedelta
@@ -11,52 +11,25 @@ import json
 import os
 
 
-STATE_FILE = os.path.join(os.path.dirname(__file__), "pending_score_state.json")
-EMPTY_SCRAPE_DELAY = timedelta(hours=24)
-
-
-def _load_pending_state() -> dict:
-    if not os.path.exists(STATE_FILE):
-        return {}
-    try:
-        with open(STATE_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return {}
-
-
-def _save_pending_state(state: dict):
-    with open(STATE_FILE, "w", encoding="utf-8") as f:
-        json.dump(state, f)
+EMPTY_SCRAPE_DELAY = timedelta(hours=1)
 
 
 def _get_last_empty_scrape() -> datetime | None:
-    state = _load_pending_state()
-    ts = state.get("last_empty_scrape")
-    if not ts:
+    val = get_pipeline_state("last_empty_scrape")
+    if not val:
         return None
     try:
-        return datetime.fromisoformat(ts)
+        return datetime.fromisoformat(val)
     except Exception:
         return None
 
 
 def _set_last_empty_scrape(dt: datetime):
-    state = _load_pending_state()
-    state["last_empty_scrape"] = dt.isoformat()
-    _save_pending_state(state)
+    set_pipeline_state("last_empty_scrape", dt.isoformat())
 
 
 def _clear_empty_scrape_state():
-    state = _load_pending_state()
-    state.pop("last_empty_scrape", None)
-    if state:
-        _save_pending_state(state)
-    else:
-        try:
-            os.remove(STATE_FILE)
-        except FileNotFoundError:
-            pass
+    set_pipeline_state("last_empty_scrape", "")
 
 
 def _should_scrape_now() -> bool:
@@ -108,48 +81,53 @@ def run_scrape_and_enqueue():
     print(f"[scrape] done, {queued} listings queued for scoring :|")
 
 
-def score_one_from_queue():
+def score_batch_from_queue(batch_size: int = 10):
     """
-    phase 2: runs every few minutes via APScheduler
+    phase 2: scores listings up to batch_size listings from the queue,
+    resets any stuck rows first, then dequeues and scores one by one
+    """
+    reset_stuck_rows(older_than_minutes=15)
 
-    picks exactly one listing from the queue, scores it with gemini,
-    stores it if above threshold. one api call per invocation
-    """
     profile = get_resume_profile()
     if not profile:
         print("[scorer] no resume profile found, what are you doing gng?")
         return
 
-    row = dequeue_one()
-    if row is None:
-        return    #queue empty, nothing to do (silent return)
+    scored = 0
+    for _ in range(batch_size):
+        row = dequeue_one()
+        if row is None:
+            break    # queue empty
 
-    listing = row["listing"]
-    print(f"[scorer] scoring: {listing['title']} @ {listing.get('company_or_organiser', '?')}")
+        listing = row["listing"]
+        print(f"[scorer] scoring: {listing['title']} @ {listing.get('company_or_organiser', '?')}")
 
-    try:
-        score, reason = score_listing(listing, profile)
-    except Exception as e:
-        print(f"[scorer] gemini error, will retry next tick: {e}")
-        requeue_pending_score(row["id"])
-        return
+        try:
+            score, reason = score_listing(listing, profile)
+        except Exception as e:
+            print(f"[scorer] gemini error, requeueing: {e}")
+            requeue_pending_score(row["id"])
+            break    #if error, wait for next run instead of hammering API again
 
-    if score < SCORE_THRESHOLD:
-        print(f"[scorer] below threshold ({score}): {listing['title']}")
+        if score < SCORE_THRESHOLD:
+            print(f"[scorer] below threshold ({score}): {listing['title']}")
+            delete_pending_score(row["id"])
+            continue
+
+        listing["relevance_score"] = score
+        listing["relevance_reason"] = reason
+        try:
+            insert_listing(listing, score, reason)
+        except Exception as e:
+            print(f"[scorer] failed to persist, requeueing: {e}")
+            requeue_pending_score(row["id"])
+            continue
+
         delete_pending_score(row["id"])
-        return
+        print(f"[scorer] stored ({score}/10): {listing['title']}")
+        scored += 1
 
-    listing["relevance_score"] = score
-    listing["relevance_reason"] = reason
-    try:
-        insert_listing(listing, score, reason)
-    except Exception as e:
-        print(f"[scorer] failed to persist listing, will retry next tick: {e}")
-        requeue_pending_score(row["id"])
-        return
-
-    delete_pending_score(row["id"])
-    print(f"[scorer] stored ({score}/10): {listing['title']}")
+    print(f"[scorer] batch done, scored {scored} listings")
 
 
 def run_morning_digest():
