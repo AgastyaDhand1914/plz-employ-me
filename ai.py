@@ -78,35 +78,38 @@ Write a short, friendly digest email body (no subject line) for a B.Tech student
 summarising these new internship and hackathon opportunities.
 Highlight top picks and upcoming deadlines. 2-3 short paragraphs max.
 
-Listings:
+Recent Listings found:
 {json.dumps(new_listings, indent=2)}
 """
     return client.models.generate_content(model=MODEL, contents=prompt).text
 
 
-def generate_checklist(listing: dict, profile: dict) -> str:
 
-    prompt = f"""
-A B.Tech student is preparing to apply for this opportunity.
-Based on their profile and the listing, generate a short bullet-point checklist
-of what to prepare, what to highlight from their resume, and any specific requirements.
-Keep it concise — 5 to 7 bullets max.
+#RETRACTED FOR NOW
 
-Profile: {json.dumps(profile)}
-Listing: {json.dumps(listing)}
-"""
-    return client.models.generate_content(model=MODEL, contents=prompt).text
+# def generate_checklist(listing: dict, profile: dict) -> str:
+
+#     prompt = f"""
+# A B.Tech student is preparing to apply for this opportunity.
+# Based on their profile and the listing, generate a short bullet-point checklist
+# of what to prepare, what to highlight from their resume, and any specific requirements.
+# Keep it concise — 5 to 7 bullets max.
+
+# Profile: {json.dumps(profile)}
+# Listing: {json.dumps(listing)}
+# """
+#     return client.models.generate_content(model=MODEL, contents=prompt).text
 
 
-def nl_to_filters(query: str) -> dict:
+# def nl_to_filters(query: str) -> dict:
 
-    prompt = f"""
-Convert this natural language query into filter parameters for an internship/hackathon database.
-Respond ONLY with valid JSON, no explanation, no code fences.
-Available fields: type (hackathon/internship), is_remote (bool), location (string),
-deadline_before (YYYY-MM-DD), min_score (int), status (interested/applied/etc).
+#     prompt = f"""
+# Convert this natural language query into filter parameters for an internship/hackathon database.
+# Respond ONLY with valid JSON, no explanation, no code fences.
+# Available fields: type (hackathon/internship), is_remote (bool), location (string),
+# deadline_before (YYYY-MM-DD), min_score (int), status (interested/applied/etc).
 
-Query: "{query}"
-Example output: {{"type": "internship", "is_remote": true, "min_score": 7}}
-"""
-    return json.loads(_generate(prompt))
+# Query: "{query}"
+# Example output: {{"type": "internship", "is_remote": true, "min_score": 7}}
+# """
+#     return json.loads(_generate(prompt))

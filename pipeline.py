@@ -46,11 +46,11 @@ def run_scrape_and_enqueue():
 
     #check if any listings are pending to be scored and skip
     if pending_score_has_unprocessed():
-        print("[scrape] pending_score still has pending rows, skipping scrape")
+        print("[scrape] pending_score still has pending rows, skipping current scrape")
         return
 
     if not _should_scrape_now():
-        print("[scrape] empty scrape cooldown active, skipping scrape")
+        print("[scrape] empty scrape cooldown active, skipping current scrape")
         return
 
     print("[scrape] starting scrape run >:)")
@@ -61,7 +61,7 @@ def run_scrape_and_enqueue():
     filtered = filter_listings(raw_listings)
 
     if not filtered:
-        print("[scrape] no listings found, waiting 24 hours before next scrape")
+        print(f"[scrape] no listings found, waiting {EMPTY_SCRAPE_DELAY} hour(s) before next scrape")
         _set_last_empty_scrape(datetime.utcnow())
         return
 
@@ -124,7 +124,7 @@ def score_batch_from_queue(batch_size: int = 10):
         print(f"[scorer] stored ({score}/10): {listing['title']}")
         scored += 1
 
-    print(f"[scorer] batch done, scored {scored} listings")
+    print(f"[scorer] batch done, stored {scored} relevant listings")
 
 
 def run_morning_digest():
@@ -139,7 +139,7 @@ def run_morning_digest():
         return
 
     depth = queue_depth()
-    listings = get_recent_listings(limit=30)
+    listings = get_recent_listings(limit=25)
 
     if not listings:
         print("[digest] no listings to digest, we might be cooked")

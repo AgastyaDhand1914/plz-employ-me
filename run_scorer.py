@@ -1,2 +1,2 @@
 from pipeline import score_batch_from_queue
-score_batch_from_queue(batch_size=10)
+score_batch_from_queue(batch_size=20)

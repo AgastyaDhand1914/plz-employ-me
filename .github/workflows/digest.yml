@@ -2,7 +2,8 @@ name: digest
 
 on:
   schedule:
-    - cron: "30 4 * * *"    #04:30 UTC = 10:00 IST
+    - cron: "30 0 * * *"    #00:30 UTC = 6:00 IST, since github actions on free tier deprioritizes, 
+                            #to get email at a preferred time, running the workflow earlier :/
   workflow_dispatch:
 
 jobs:

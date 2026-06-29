@@ -17,8 +17,7 @@ from db import (
 )
 
 st.set_page_config(
-    page_title="tracker",
-    page_icon="⚡",
+    page_title="PlzEmployMe",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
@@ -410,8 +409,8 @@ def load_profile():
     return get_resume_profile()
 
 st.markdown("""
-<div class="wordmark">⚡ tracker</div>
-<div class="tagline">internships · hackathons · relevance-scored · ai-assisted</div>
+<div class="wordmark">PlzEmployMe</div>
+<div class="tagline">lock in gang (pretty pwease 🥀)</div>
 """, unsafe_allow_html=True)
 
 
@@ -502,22 +501,49 @@ with tab_listings:
             submit_custom = st.form_submit_button("Add opportunity")
 
         if submit_custom:
-            listing_data = {
-                "source": custom_source.strip() or "manual",
-                "type": custom_type,
-                "title": custom_title.strip() or "Untitled opportunity",
-                "company_or_organiser": custom_company.strip() or "—",
-                "url": "",
-                "location": custom_location.strip() or "",
-                "is_remote": custom_remote,
-                "stipend": custom_stipend.strip() or None,
-                "deadline": custom_deadline.strip() or None,
-                "description": custom_description.strip() or None,
-            }
-            insert_listing(listing_data, 0, "manual entry")
-            load_listings.clear()
-            st.success("Custom opportunity added.")
-            st.experimental_rerun()
+            errors = []
+            title = custom_title.strip()
+            company = custom_company.strip()
+            location = custom_location.strip()
+            deadline = custom_deadline.strip()
+            description = custom_description.strip()
+
+            if not title:
+                errors.append("Title is required.")
+            if not company:
+                errors.append("Company / Organiser is required.")
+            if not description:
+                errors.append("Description is required.")
+            if not custom_remote and not location:
+                errors.append("Location is required for offline opportunities.")
+            if deadline:
+                try:
+                    datetime.strptime(deadline, "%Y-%m-%d")
+                except ValueError:
+                    errors.append("Deadline must be in YYYY-MM-DD format.")
+
+            if errors:
+                st.error("\n".join(errors))
+            else:
+                listing_data = {
+                    "source": custom_source.strip() or "manual",
+                    "type": custom_type,
+                    "title": title,
+                    "company_or_organiser": company,
+                    "url": "",
+                    "location": location or "",
+                    "is_remote": custom_remote,
+                    "stipend": custom_stipend.strip() or None,
+                    "deadline": deadline or None,
+                    "description": description or None,
+                }
+                try:
+                    insert_listing(listing_data, 0, "manual entry")
+                    load_listings.clear()
+                    st.success("Custom opportunity added.")
+                    st.experimental_rerun()
+                except Exception as e:
+                    st.error(f"Could not add custom opportunity: {e}")
 
     if not listings:
         st.markdown("""
@@ -586,10 +612,14 @@ with tab_listings:
                     st.markdown("<div class='detail-section-label'>Application Status</div>", unsafe_allow_html=True)
 
                     if st.button("delete listing", key=f"delete_{sel_id}"):
-                        delete_listing(sel_id)
-                        load_listings.clear()
-                        load_all_applications.clear()
-                        st.experimental_rerun()
+                        try:
+                            delete_listing(sel_id)
+                            load_listings.clear()
+                            load_all_applications.clear()
+                            st.success("Listing deleted.")
+                            st.experimental_rerun()
+                        except Exception as e:
+                            st.error(f"Could not delete listing: {e}")
 
                     if app:
                         current_status = app["status"]
@@ -601,16 +631,24 @@ with tab_listings:
                             label_visibility="collapsed",
                         )
                         if new_status != current_status:
-                            update_application_status(app["id"], new_status)
-                            load_all_applications.clear()
-                            st.rerun()
+                            try:
+                                update_application_status(app["id"], new_status)
+                                load_all_applications.clear()
+                                st.success("Application status updated.")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Could not update application status: {e}")
                     else:
                         st.markdown("<div style='font-size:0.8rem;color:#555;'>not tracked yet</div>",
                                     unsafe_allow_html=True)
                         if st.button("✦ mark as interested", key=f"interest_{sel_id}"):
-                            create_application(sel_id, "interested")
-                            load_all_applications.clear()
-                            st.rerun()
+                            try:
+                                create_application(sel_id, "interested")
+                                load_all_applications.clear()
+                                st.success("Application marked as interested.")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Could not create application: {e}")
             else:
                 st.markdown("""
                 <div style="padding:3rem 1rem;text-align:center;">
