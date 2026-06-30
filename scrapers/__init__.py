@@ -6,7 +6,7 @@ def print_scraper_header(source: str, title: str) -> None:
 
 
 def print_scraper_section(source: str, section_title: str) -> None:
-    print(f"\n--- [{source}] {section_title} ---")
+    print(f"\n[{source}] {section_title}")
 
 
 def print_scraper_footer(source: str, summary: str) -> None:

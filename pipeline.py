@@ -56,7 +56,7 @@ def run_scrape_and_enqueue():
 
     print("[scrape] starting scrape run >:)")
 
-    raw_listings = scrape_internshala() + scrape_unstop
+    raw_listings = scrape_internshala() + scrape_unstop()
     #later: unstop, devfolio etc
 
     filtered = filter_listings(raw_listings)
