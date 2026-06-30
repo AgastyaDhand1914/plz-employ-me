@@ -1,4 +1,5 @@
 from scrapers.internshala import scrape as scrape_internshala
+from scrapers.unstop import scrape as scrape_unstop
 from filters import filter_listings
 from ai import score_listing, generate_digest
 from db import (get_resume_profile, insert_listing, mark_seen, enqueue_listing, dequeue_one,
@@ -55,7 +56,7 @@ def run_scrape_and_enqueue():
 
     print("[scrape] starting scrape run >:)")
 
-    raw_listings = scrape_internshala()
+    raw_listings = scrape_internshala() + scrape_unstop
     #later: unstop, devfolio etc
 
     filtered = filter_listings(raw_listings)

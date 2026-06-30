@@ -3,6 +3,8 @@ from bs4 import BeautifulSoup
 import re
 from datetime import datetime, timedelta
 
+from . import print_scraper_header, print_scraper_section, print_scraper_footer
+
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -156,16 +158,17 @@ def scrape() -> list[dict]:
     Scrape all configured Internshala URLs and return deduplicated listings
     conforming to the scraper interface contract.
     """
+    print_scraper_header("internshala", "Starting Internshala scraper")
     all_results = []
     seen_urls = set()
 
     for url in SCRAPE_URLS:
-        print(f"[internshala] Scraping {url}")
+        print_scraper_section("internshala", f"Scraping URL: {url}")
         page_results = _scrape_page(url)
         for listing in page_results:
             if listing["url"] not in seen_urls:
                 seen_urls.add(listing["url"])
                 all_results.append(listing)
 
-    print(f"[internshala] Found {len(all_results)} unique listings.")
+    print_scraper_footer("internshala", f"Found {len(all_results)} unique listings.")
     return all_results
